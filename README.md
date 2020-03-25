@@ -1,54 +1,40 @@
-# esphome-mitsubishiheatpump
 
-Wirelessly control your Mitsubishi Comfort HVAC equipment with an ESP8266 or
-ESP32 using the [ESPHome](https://esphome.io) framework.
+# WARNING!!!!  This is a work in progress
+
+Despite how it might look and all the words below, this is just a plan.  I'm happy to answer questions, but the short version is that I haven't even yet proven this will work as I expect.  At this time, consider this more of a design spec than anything even remotel close to working.
+
+
+# esphome-remote_topside
+
+Wirelessly control your spa by emulating the topside for Hydroquip and (some) Gecko spa / hot tub systems by using the ESP32 and the [ESPHome](https://esphome.io) framework.
 
 ## Features
-* Instant feedback of command changes via RF Remote to HomeAssistant or MQTT.
-* Direct control without the remote.
-* Uses the [SwiCago/HeatPump](https://github.com/SwiCago/HeatPump) Arduino
-  libary to talk to the unit directly via the internal `CN105` connector.
+* Does not require or use anything relatetd to in.touch
+* Control all functions (including setting temperature) normally available at the spa topside
+* Retrieve current temperature
 
 ## Requirements
-* https://github.com/SwiCago/HeatPump
+
 * ESPHome 1.15.0-dev or greater
+* A Hydropquip or Gecko spa system that uses the 8-pin top-side connector (see picture below). Other connector types *might* work
+* ESP32 with enough spare GPIOs to match your needs
+* Topside extension cable
 
 ## Supported Microcontrollers
-This library should work on most ESP8266 or ESP32 platforms. It has been tested
-with the following MCUs:
-* Generic ESP-01S board (ESP8266)
-* WeMos D1 Mini (ESP8266)
-* Generic ESP32 Dev Kit (ESP32)
+This  should work on most ESP32 platforms.  It likely won't work on ESP8266 devices because of their poor support for acting as a SPI slave.
 
-## Supported Mitsubishi Climate Units
-The underlying HeatPump library works with a number of Mitsubishi HVAC
-units. Basically, if the unit has a `CN105` header on the main board, it should
-work with this library. The [HeatPump
-wiki](https://github.com/SwiCago/HeatPump/wiki/Supported-models) has a more
-exhaustive list.
+## Supported Controllers Units
 
-The same `CN105` connector is used by the Mitsubishi KumoCloud remotes, which
-have a
-[compatibility list](https://www.mitsubishicomfort.com/kumocloud/compatibility)
-available.
+(TBD)
 
-The whole integration with this libary and the underlying HeatPump has been
-tested by the author on the following units:
-* `MSZ-GL06NA`
-* `MFZ-KA09NA`
+
 
 ## Usage
-### Step 1: Build a control circuit.
+### Step 1: Pick GPIO pins.
 
-Build a control circuit with your MCU as detailed in the [SwiCago/HeatPump
- README](https://github.com/SwiCago/HeatPump/blob/master/README.md).
-You can use either an ESP8266 or an ESP32 for this.
+Interface to your ESP32.
 
-Note: several users have reported that they've been able to get away with
-not using the pull-up resistors, and just [directly connecting a Wemos D1 mini
-to the control
-board](https://github.com/SwiCago/HeatPump/issues/13#issuecomment-457897457)
-via CN105.
+Avoid these pins: (TBD)
 
 ### Step 2: Use ESPHome 1.15.0-dev or higher
 
@@ -60,50 +46,39 @@ This repository needs to live in your ESPHome configuration directory, as it
 doesn't work correctly when used as a Platform.IO library, and there doesn't
 seem to be an analog for that functionality for ESPHome code.
 
-On Hass.IO, you'll want to do something like:
+On Home Assistant (with supervisor) you'll want to do something like:
 
 * Change directories to your esphome configuration directory.
 * `mkdir -p src`
 * `cd src`
-* `git clone https://github.com/geoffdavis/esphome-mitsubishiheatpump.git`
+* `git clone https://github.com/mrand/esphome-remote_topside.git`
 
 ### Step 4: Configure your ESPHome device with YAML
 
 Create an ESPHome YAML configuration with the following sections:
- * `esphome: libraries: [https://github.com/SwiCago/HeatPump]`
- * `esphome: includes: [src/esphome-mitsubishiheatpump]`
- * `climate:` - set up a custom climate entry, change the Serial port as needed.
- * ESP8266 only: `logger: baud_rate: 0` - disable serial port logging on the
-   sole ESP8266 hardware UART
+ * `esphome: libraries: SPI slave` - if we can't get ESPHome library to do it
+ * `esphome: includes: [src/esphome-remote_topside]`
+ * `climate:` - set up a custom climate entry, change the SPI port as needed.
 
 The custom climate definition should use `platform: custom` and contain a
-`lambda` block, where you instanciate an instance of the MitsubishiHeatPump
-class, and then register it with ESPHome. It should allso contain a "climates"
-entry. On ESP32 you
-can change `&Serial` to `&Serial1` or `&Serial2` and re-enable logging to the
-main serial port.
+`lambda` block, where you instantiate an instance of the remote_topside
+class, and then register it with ESPHome. It should also contain a "climates"
+entry. You can choose `&VSPI` or `&HSPI` and 
+re-enable logging to the main serial port.
 
-If that's all greek to you, here's an example. Change "My Heat Pump" to
-whatever you want.
+If that's all greek to you, here's an example. Change "Spa" if you'd like.
 
 ```yaml
 climate:
   - platform: custom
     lambda: |-
-      auto my_heatpump = new MitsubishiHeatPump(&Serial);
-      App.register_component(my_heatpump);
-      return {my_heatpump};
+      auto my_topside = new SpaTopSide(&Spi);
+      App.register_component(my_topside);
+      return {my_topside};
     climates:
-      - name: "My Heat Pump"
+      - name: "Spa"
 ```
 
-Note: this component DOES NOT use the ESPHome `uart` component, as it requires
-direct access to a hardware UART via the Arduino `HardwareSerial` class. The
-Mitsubishi Heatpump units use an atypical serial port setting ("even parity").
-Parity bit support is not implemented in any of the existing software serial
-libraries, including the one in ESPHome. There's currently no way to guarantee
-access to a hardware UART nor retrieve the `HardwareSerial` handle from the
-`uart` component within the ESPHome framework.
 
 # Example configuration
 
@@ -114,16 +89,15 @@ various items prefixed with `!secret`.
 
 ```yaml
 esphome:
-  name: denheatpump
-  platform: ESP8266
-  board: esp01_1m
-  # Boards tested: ESP-01S (ESP8266), Wemos D1 Mini (ESP8266); ESP32 Wifi-DevKit2
+  name: spa
+  platform: ESP32
+  board: put_board_type_here  # https://docs.platformio.org/en/latest/platforms/espressif32.html#boards
 
   libraries:
-    - SwiCago/HeatPump
+#    - SwiCago/HeatPump  # this will change or (hopefully) go away
 
   includes:
-    - src/esphome-mitsubishiheatpump
+    - src/esphome-remote_topside
 
 wifi:
   ssid: !secret wifi_ssid
@@ -131,16 +105,13 @@ wifi:
 
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
-    ssid: "Denheatpump Fallback Hotspot"
+    ssid: "Spa Hotspot"
     password: !secret fallback_password
 
 captive_portal:
 
 # Enable logging
 logger:
-  # ESP8266 only - disable serial port logging, as the HeatPump component
-  # needs the sole hardware UART on the ESP8266
-  baud_rate: 0
 
 # Enable Home Assistant API
 api:
@@ -156,67 +127,38 @@ time:
   - platform: homeassistant
     id: homeassistant_time
 
-# Text sensors with general information.
-text_sensor:
-  # Expose ESPHome version as sensor.
-  - platform: version
-    name: denheatpump ESPHome Version
-  # Expose WiFi information as sensors.
-  - platform: wifi_info
-    ip_address:
-      name: denheatpump IP
-    ssid:
-      name: denheatpump SSID
-    bssid:
-      name: denheatpump BSSID
-
 # Sensors with general information.
 sensor:
   # Uptime sensor.
   - platform: uptime
-    name: denheatpump Uptime
+    name: Spa Uptime
 
   # WiFi Signal sensor.
   - platform: wifi_signal
-    name: denheatpump WiFi Signal
+    name: Spa WiFi Signal
     update_interval: 60s
 
 
 climate:
   - platform: custom
-    # ESP32 only - change &Serial to &Serial1 or &Serial2 and remove the
-    # logging:baud_rate above to allow the built-in UART0 to function for
-    # logging.
     lambda: |-
-      auto my_heatpump = new MitsubishiHeatPump(&Serial);
-      App.register_component(my_heatpump);
-      return {my_heatpump};
+      auto my_topside = new remote_topside(&Spi);
+      App.register_component(my_topside);
+      return {my_topside};
     climates:
-      - name: "Den Heat Pump"
+      - name: "Spa"
 ```
 
 # See Also
 
-## Other Implementations
-The [gysmo38/mitsubishi2MQTT](https://github.com/gysmo38/mitsubishi2MQTT)
-  Arduino sketch also uses the `SwiCago/HeatPump`
-library, and works with MQTT directly. The author found it's WiFi stack to not
-be particularly robust, but the controls worked fine. Like this ESPHome
-repository, it will automatically register the device in your HomeAssistant
-instance if you have HA configured to do so.
+## References
 
-There's also the built-in to ESPHome
-[Mitsubishi](https://github.com/esphome/esphome/blob/dev/esphome/components/mitsubishi/mitsubishi.h)
-climate component. It's only in the `dev` branch at the moment (2020-03-11).
-The big drawback with the built-in component is that it uses Infrared Remote
-commands to talk to the Heat Pump. By contrast, the approach used by this
-repository and it's underlying `HeatPump` library allows bi-directional
-communication with the Mitsubishi system, and can detect when someone changes
-the settings via an IR remote.
+First, this was based on work done for a different project: 
+* https://github.com/geoffdavis/esphome-mitsubishiheatpump
 
-## Reference documentation
-
-The author referred to the following documentation repeatedly:
+Other useful documentation and information:
+* https://esphome.io/custom/spi.html and https://esphome.io/api/spi_8h.html
 * https://esphome.io/components/sensor/custom.html
 * https://esphome.io/components/climate/custom.html
-* Source for ESPHome's Dev branch: https://github.com/esphome/esphome/tree/dev/esphome/components/climate
+* https://gist.github.com/liads/c702fd4b8529991af9cd52d03b694814 (another custome ESPHome climate component) 
+* https://github.com/SwiCago/HeatPump (library originally used by the Mitsubishi Heat Pump project)
