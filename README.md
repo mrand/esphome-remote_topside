@@ -17,11 +17,11 @@ Wirelessly control your spa by emulating the topside for Hydroquip and (some) Ge
 
 * ESPHome 1.15.0-dev or greater
 * A Hydropquip or Gecko spa system that uses the 8-pin top-side connector (see picture below). Other connector types *might* work
-* ESP32 with enough spare GPIOs to match your needs
+* ESP device with enough spare GPIOs to match your needs
 * Topside extension cable
 
 ## Supported Microcontrollers
-This  should work on most ESP32 platforms.  It likely won't work on ESP8266 devices because of their poor support for acting as a SPI slave.
+This should work on most ESP platforms, assuming you have enough pins.  The built-in SPI slave for the ESP device likely won't handle the datastream, so this will attempt to do a bit-wise receive and decode.
 
 ## Supported Controllers Units
 
@@ -32,7 +32,7 @@ This  should work on most ESP32 platforms.  It likely won't work on ESP8266 devi
 ## Usage
 ### Step 1: Pick GPIO pins.
 
-Interface to your ESP32.
+Interface to your ESP.
 
 Avoid these pins: (TBD)
 
@@ -56,23 +56,22 @@ On Home Assistant (with supervisor) you'll want to do something like:
 ### Step 4: Configure your ESPHome device with YAML
 
 Create an ESPHome YAML configuration with the following sections:
- * `esphome: libraries: SPI slave` - if we can't get ESPHome library to do it
+ * `esphome: libraries: SPI slave` - interrupt based bit-stream receiver
  * `esphome: includes: [src/esphome-remote_topside]`
  * `climate:` - set up a custom climate entry, change the SPI port as needed.
 
 The custom climate definition should use `platform: custom` and contain a
 `lambda` block, where you instantiate an instance of the remote_topside
 class, and then register it with ESPHome. It should also contain a "climates"
-entry. You can choose `&VSPI` or `&HSPI` and 
-re-enable logging to the main serial port.
+entry.
 
-If that's all greek to you, here's an example. Change "Spa" if you'd like.
+If that's all greek to you, here's an example. Change the "Spa" name, if you'd like.
 
 ```yaml
 climate:
   - platform: custom
     lambda: |-
-      auto my_topside = new SpaTopSide(&Spi);
+      auto my_topside = new SpaTopSide(... GPIO pins ...);
       App.register_component(my_topside);
       return {my_topside};
     climates:
@@ -162,3 +161,6 @@ Other useful documentation and information:
 * https://esphome.io/components/climate/custom.html
 * https://gist.github.com/liads/c702fd4b8529991af9cd52d03b694814 (another custome ESPHome climate component) 
 * https://github.com/SwiCago/HeatPump (library originally used by the Mitsubishi Heat Pump project)
+
+Similar stuff for other brands of tub controllers I've found:
+* https://github.com/olivierhill/Spaduino  (Balboa / Cal Spa)
